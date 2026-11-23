@@ -1,0 +1,62 @@
+dialog {
+  padding: 50px 82px;
+  overflow: hidden;
+}
+
+.close,
+.lightbox-nav {
+  position: fixed;
+  border: 0;
+  color: white;
+  cursor: pointer;
+  text-shadow: 0 2px 8px #000;
+}
+
+.close { z-index: 2; }
+
+.lightbox-nav {
+  z-index: 1;
+  top: 50%;
+  width: 58px;
+  height: 78px;
+  margin-top: -39px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .35);
+  font-size: 64px;
+  line-height: 60px;
+}
+
+.lightbox-nav:hover,
+.lightbox-nav:focus-visible {
+  background: rgba(199, 152, 37, .9);
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+.lightbox-nav.previous { left: 14px; }
+.lightbox-nav.next { right: 14px; }
+
+.lightbox-counter {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(0, 0, 0, .55);
+  color: white;
+  font-size: 14px;
+}
+
+@media (max-width: 760px) {
+  dialog { padding: 42px 52px; }
+  .lightbox-nav {
+    width: 44px;
+    height: 66px;
+    margin-top: -33px;
+    font-size: 52px;
+  }
+  .lightbox-nav.previous { left: 4px; }
+  .lightbox-nav.next { right: 4px; }
+}

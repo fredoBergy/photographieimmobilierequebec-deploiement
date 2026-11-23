@@ -1,0 +1,5 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/agence2t3m/photographie-immobiliere-quebec.com/
+    - /usr/bin/rsync -a --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r --exclude=HEBERGEMENT.txt --exclude=.DS_Store site-autonome/ $DEPLOYPATH
