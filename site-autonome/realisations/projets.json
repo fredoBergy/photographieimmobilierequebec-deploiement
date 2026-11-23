@@ -573,8 +573,8 @@
         }
       ],
       "created_at": "2026-11-23T17:29:43-05:00",
-      "publication_status": "local_only",
-      "publication_error": "ssh: connect to host 184.107.100.26 port 22: Connection refused\nrsync(14675): error: unexpected end of file"
+      "published_at": "2026-11-23T17:32:36-05:00",
+      "publication_status": "queued_for_cpanel"
     },
     {
       "slug": "2026-10-27-via-capitale-3760-bld-ste-anne",
