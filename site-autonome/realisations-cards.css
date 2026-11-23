@@ -1,0 +1,11 @@
+/* Dimensions constantes pour toutes les cartes du portfolio. */
+@media (min-width: 761px) {
+  .project-grid {
+    grid-template-columns: repeat(auto-fill, 360px);
+    justify-content: start;
+  }
+
+  .project-card {
+    width: 360px;
+  }
+}
