@@ -81,6 +81,29 @@ if ($photo !== null) {
     if (!function_exists('imagecreatefromjpeg') || !($image = @imagecreatefromjpeg($path))) {
         fail(503, 'Image protégée temporairement indisponible.');
     }
+    if (($_GET['comparaison'] ?? '') === '1') {
+        if (count($cards[$photo] ?? []) !== 2) {
+            fail(404, 'Comparaison indisponible.');
+        }
+        $before = @imagecreatefromjpeg($dir . '/photos/' . $cards[$photo]['Avant'] . '.jpg');
+        if (!$before) {
+            fail(503, 'Comparaison temporairement indisponible.');
+        }
+        $canvasWidth = min(1600, max(imagesx($before), imagesx($image)));
+        $beforeHeight = max(1, (int) round(imagesy($before) * $canvasWidth / imagesx($before)));
+        $afterHeight = max(1, (int) round(imagesy($image) * $canvasWidth / imagesx($image)));
+        $band = 34;
+        $canvas = imagecreatetruecolor($canvasWidth, $beforeHeight + $afterHeight + 2 * $band);
+        imagefill($canvas, 0, 0, imagecolorallocate($canvas, 28, 28, 28));
+        $white = imagecolorallocate($canvas, 255, 255, 255);
+        imagestring($canvas, 5, 12, 9, 'AVANT', $white);
+        imagecopyresampled($canvas, $before, 0, $band, 0, 0, $canvasWidth, $beforeHeight, imagesx($before), imagesy($before));
+        imagestring($canvas, 5, 12, $beforeHeight + $band + 9, 'APRES', $white);
+        imagecopyresampled($canvas, $image, 0, $beforeHeight + 2 * $band, 0, 0, $canvasWidth, $afterHeight, imagesx($image), imagesy($image));
+        imagedestroy($before);
+        imagedestroy($image);
+        $image = $canvas;
+    }
     $width = imagesx($image);
     $height = imagesy($image);
     $mark = 'PHOTOGRAPHIE IMMOBILIERE QUEBEC';
@@ -247,7 +270,8 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <article>
 <div class="<?= $paired ? 'pair' : '' ?>">
 <?php foreach ($versions as $label => $versionId): $image = esc($url . '&photo=' . $versionId); ?>
-<figure><a href="<?= $image ?>" target="_blank" rel="noopener"><img src="<?= $image ?>" alt="<?= esc($label ?: $name) ?>" loading="lazy"></a>
+<?php $zoom = $paired ? esc($url . '&photo=' . $id . '&comparaison=1') : $image; ?>
+<figure><a href="<?= $zoom ?>" target="_blank" rel="noopener"<?= $paired ? ' aria-label="Ouvrir la comparaison Avant et Après"' : '' ?>><img src="<?= $image ?>" alt="<?= esc($label ?: $name) ?>" loading="lazy"></a>
 <?php if ($label !== ''): ?><figcaption><?= esc($label) ?></figcaption><?php endif; ?>
 </figure>
 <?php endforeach; ?>
