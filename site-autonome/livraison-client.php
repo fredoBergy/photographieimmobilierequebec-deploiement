@@ -87,6 +87,8 @@ if ($photo !== null) {
 }
 
 $_SESSION['csrf'] = $_SESSION['csrf'] ?? bin2hex(random_bytes(32));
+$logPath = $dir . '/retouches.jsonl';
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($ownerView) {
         fail(405, 'La vue photographe est en lecture seule.');
@@ -99,43 +101,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!is_array($notes) || count($notes) > count($photos)) {
         fail(400, 'Demandes invalides.');
     }
-    $requests = [];
     foreach ($notes as $id => $note) {
         if (!isset($photos[$id]) || !is_string($note) || strlen($note) > 8000) {
             fail(400, 'Une demande est invalide ou trop longue.');
         }
-        if (trim($note) !== '') {
-            $requests[] = ['photo' => $photos[$id], 'demande' => trim($note)];
-        }
     }
-    if (!$requests) {
-        fail(400, 'Ajoutez une demande sous au moins une photo.');
-    }
-    $record = json_encode(['date' => gmdate('c'), 'demandes' => $requests],
-        JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
-    if (file_put_contents($dir . '/retouches.jsonl', $record . PHP_EOL, FILE_APPEND | LOCK_EX) === false) {
-        fail(500, 'Enregistrement impossible. Réessayez dans un instant.');
-    }
-    $_SESSION['sent'][$gallery] = true;
-    header('Location: ' . $url, true, 303);
-    exit;
 }
-$sent = !empty($_SESSION['sent'][$gallery]);
-unset($_SESSION['sent'][$gallery]);
 $byPhoto = [];
-if ($ownerView && is_file($dir . '/retouches.jsonl')) {
-    $log = fopen($dir . '/retouches.jsonl', 'rb');
-    if ($log === false || !flock($log, LOCK_SH)) {
+$currentNotes = [];
+if ($isPost || is_file($logPath)) {
+    $log = fopen($logPath, $isPost ? 'c+' : 'rb');
+    if ($log === false || !flock($log, $isPost ? LOCK_EX : LOCK_SH)) {
         fail(500, 'Impossible de lire les retouches.');
     }
     while (($line = fgets($log)) !== false) {
         $entry = json_decode($line, true);
         foreach ($entry['demandes'] ?? [] as $request) {
             $byPhoto[$request['photo']][] = $request['demande'];
+            $currentNotes[$request['photo']] = $request['demande'];
+        }
+    }
+    if ($isPost) {
+        $requests = [];
+        foreach ($notes as $id => $note) {
+            $note = trim($note);
+            if ($note !== ($currentNotes[$photos[$id]] ?? '')) {
+                $requests[] = ['photo' => $photos[$id], 'demande' => $note];
+            }
+        }
+        if ($requests) {
+            $record = json_encode(['date' => gmdate('c'), 'demandes' => $requests],
+                JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+            if ($record === false || fseek($log, 0, SEEK_END) !== 0
+                || fwrite($log, $record . PHP_EOL) !== strlen($record . PHP_EOL) || !fflush($log)) {
+                fail(500, 'Enregistrement impossible. Réessayez dans un instant.');
+            }
         }
     }
     fclose($log);
 }
+if ($isPost) {
+    $_SESSION['sent'][$gallery] = true;
+    header('Location: ' . $url, true, 303);
+    exit;
+}
+$sent = !empty($_SESSION['sent'][$gallery]);
+unset($_SESSION['sent'][$gallery]);
 ?>
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -168,12 +179,12 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <a href="<?= $image ?>" target="_blank" rel="noopener"><img src="<?= $image ?>" alt="<?= esc($name) ?>" loading="lazy"></a>
 <h2><?= esc($name) ?></h2>
 <?php if ($ownerView): ?>
-<?php foreach ($byPhoto[$name] ?? [] as $note): ?>
-<p class="notes"><?= esc($note) ?></p>
+<?php foreach (array_reverse($byPhoto[$name] ?? []) as $index => $note): ?>
+<p class="notes"><strong><?= $index === 0 ? 'Demande actuelle' : 'Version précédente' ?></strong><br><?= $note === '' ? 'Demande retirée.' : esc($note) ?></p>
 <?php endforeach; ?>
 <?php if (empty($byPhoto[$name])): ?><p>Aucune demande pour cette photo.</p><?php endif; ?>
 <?php else: ?>
-<label>Retouche demandée<textarea rows="3" maxlength="1500" name="notes[<?= (int) $id ?>]"></textarea></label>
+<label>Retouche demandée<textarea rows="3" maxlength="1500" name="notes[<?= (int) $id ?>]"><?= "\n" . esc($currentNotes[$name] ?? '') ?></textarea></label>
 <?php endif; ?>
 </article>
 <?php endforeach; ?>
