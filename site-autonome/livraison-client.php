@@ -56,6 +56,18 @@ if ($accessHash === '' || !hash_equals($accessHash, $_SESSION['galleries'][$gall
     fail(404, 'Ouvrez le lien de livraison fourni par votre photographe.');
 }
 $photos = $manifest['photos'];
+$paired = !empty($manifest['pairs']);
+$cards = [];
+foreach ($manifest['pairs'] ?? [] as $pair) {
+    if (count($pair) === 2 && isset($photos[$pair[0]], $photos[$pair[1]])) {
+        $cards[$pair[1]] = ['Avant' => $pair[0], 'Après' => $pair[1]];
+    }
+}
+if (!$paired) {
+    foreach ($photos as $id => $name) {
+        $cards[$id] = ['' => $id];
+    }
+}
 $photo = $_GET['photo'] ?? null;
 if ($photo !== null) {
     if (!is_string($photo) || !preg_match('/\A[0-9]+\z/', $photo) || !isset($photos[$photo])) {
@@ -109,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         fail(400, 'Demandes invalides.');
     }
     foreach ($notes as $id => $note) {
-        if (!isset($photos[$id]) || !is_string($note) || strlen($note) > 8000) {
+        if (!isset($cards[$id]) || !is_string($note) || strlen($note) > 8000) {
             fail(400, 'Une demande est invalide ou trop longue.');
         }
     }
@@ -203,6 +215,8 @@ h1,h2{overflow-wrap:anywhere} h2{font-size:1rem}
 .notes{overflow-wrap:anywhere;white-space:pre-wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:20px}
 article{min-width:0;background:white;padding:14px;border-radius:8px}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+figure{margin:0;min-width:0}figcaption{margin-top:6px;font-weight:600}
 img{display:block;width:100%;aspect-ratio:3/2;object-fit:contain;background:#eee}
 textarea{display:block;box-sizing:border-box;width:100%;font:inherit;margin-top:8px;padding:8px;resize:vertical}
 button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-radius:6px;padding:12px 18px}
@@ -223,9 +237,15 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
 <?php endif; ?>
 <div class="grid">
-<?php foreach ($photos as $id => $name): $image = esc($url . '&photo=' . $id); ?>
+<?php foreach ($cards as $id => $versions): $name = $photos[$id]; ?>
 <article>
-<a href="<?= $image ?>" target="_blank" rel="noopener"><img src="<?= $image ?>" alt="<?= esc($name) ?>" loading="lazy"></a>
+<div class="<?= $paired ? 'pair' : '' ?>">
+<?php foreach ($versions as $label => $versionId): $image = esc($url . '&photo=' . $versionId); ?>
+<figure><a href="<?= $image ?>" target="_blank" rel="noopener"><img src="<?= $image ?>" alt="<?= esc($label ?: $name) ?>" loading="lazy"></a>
+<?php if ($label !== ''): ?><figcaption><?= esc($label) ?></figcaption><?php endif; ?>
+</figure>
+<?php endforeach; ?>
+</div>
 <h2><?= esc($name) ?></h2>
 <?php if ($ownerView): ?>
 <?php foreach (array_reverse($byPhoto[$name] ?? []) as $index => $note): ?>
