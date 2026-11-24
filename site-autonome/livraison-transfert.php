@@ -72,7 +72,8 @@ foreach ($manifest['photos'] as $number => $name) {
     }
 }
 $manifest['expires'] = time() + 5 * 86400;
-if (file_put_contents($stage . '/gallery.json', json_encode($manifest, JSON_THROW_ON_ERROR)) === false) {
+$encoded = json_encode($manifest);
+if ($encoded === false || file_put_contents($stage . '/gallery.json', $encoded) !== strlen($encoded)) {
     error_log('Gallery publish: manifest write failed');
     stop(500);
 }
