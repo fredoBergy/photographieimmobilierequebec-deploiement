@@ -88,6 +88,7 @@ if ($photo !== null) {
 
 $_SESSION['csrf'] = $_SESSION['csrf'] ?? bin2hex(random_bytes(32));
 $logPath = $dir . '/retouches.jsonl';
+$draftPath = $dir . '/retouches-brouillon.json';
 $isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($ownerView) {
@@ -105,6 +106,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!isset($photos[$id]) || !is_string($note) || strlen($note) > 8000) {
             fail(400, 'Une demande est invalide ou trop longue.');
         }
+    }
+    $action = $_POST['action'] ?? 'envoyer';
+    if ($action === 'enregistrer') {
+        $draft = json_encode($notes, JSON_INVALID_UTF8_SUBSTITUTE);
+        $temp = tempnam($dir, '.brouillon-');
+        if ($draft === false || $temp === false || file_put_contents($temp, $draft) !== strlen($draft)
+            || !rename($temp, $draftPath)) {
+            fail(500, 'Impossible d’enregistrer le brouillon.');
+        }
+        $_SESSION['saved'][$gallery] = true;
+        header('Location: ' . $url, true, 303);
+        exit;
+    }
+    if ($action !== 'envoyer') {
+        fail(400, 'Action inconnue.');
     }
 }
 $byPhoto = [];
@@ -141,12 +157,19 @@ if ($isPost || is_file($logPath)) {
     fclose($log);
 }
 if ($isPost) {
+    if (is_file($draftPath)) {
+        unlink($draftPath);
+    }
     $_SESSION['sent'][$gallery] = true;
     header('Location: ' . $url, true, 303);
     exit;
 }
 $sent = !empty($_SESSION['sent'][$gallery]);
 unset($_SESSION['sent'][$gallery]);
+$saved = !empty($_SESSION['saved'][$gallery]);
+unset($_SESSION['saved'][$gallery]);
+$draftNotes = !$ownerView && is_readable($draftPath)
+    ? json_decode((string) file_get_contents($draftPath), true) : [];
 ?>
 <!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -170,6 +193,7 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <?php else: ?>
 <p>Ouvrez une photo pour la voir en grand ou écrivez une demande de retouche sous la photo concernée.</p>
 <?php if ($sent): ?><p role="status">Tes demandes de retouche ont été enregistrées.</p><?php endif; ?>
+<?php if ($saved): ?><p role="status">Brouillon enregistré. Tu peux rouvrir ce lien pour continuer.</p><?php endif; ?>
 <form method="post" action="<?= esc($url) ?>">
 <input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
 <?php endif; ?>
@@ -184,12 +208,13 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <?php endforeach; ?>
 <?php if (empty($byPhoto[$name])): ?><p>Aucune demande pour cette photo.</p><?php endif; ?>
 <?php else: ?>
-<label>Retouche demandée<textarea rows="3" maxlength="1500" name="notes[<?= (int) $id ?>]"><?= "\n" . esc($currentNotes[$name] ?? '') ?></textarea></label>
+<label>Retouche demandée<textarea rows="3" maxlength="1500" name="notes[<?= (int) $id ?>]"><?= "\n" . esc($draftNotes[$id] ?? $currentNotes[$name] ?? '') ?></textarea></label>
 <?php endif; ?>
 </article>
 <?php endforeach; ?>
 </div>
 <?php if (!$ownerView): ?>
-<button type="submit">Envoyer mes demandes de retouche</button></form>
+<button type="submit" name="action" value="enregistrer">Enregistrer</button>
+<button type="submit" name="action" value="envoyer">Envoyer au photographe</button></form>
 <?php endif; ?>
 </main></body></html>
