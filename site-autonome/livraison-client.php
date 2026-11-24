@@ -91,14 +91,20 @@ if ($photo !== null) {
     imagealphablending($stamp, false);
     imagesavealpha($stamp, true);
     imagefill($stamp, 0, 0, imagecolorallocatealpha($stamp, 0, 0, 0, 127));
-    imagestring($stamp, $font, 1, 1, $mark, imagecolorallocatealpha($stamp, 0, 0, 0, 100));
-    imagestring($stamp, $font, 0, 0, $mark, imagecolorallocatealpha($stamp, 255, 255, 255, 91));
-    $labelWidth = max(1, (int) ($width * 0.42));
-    $labelHeight = max(1, (int) ($labelWidth * ($markHeight + 2) / ($markWidth + 2)));
+    imagestring($stamp, $font, 1, 1, $mark, imagecolorallocatealpha($stamp, 0, 0, 0, 107));
+    imagestring($stamp, $font, 0, 0, $mark, imagecolorallocatealpha($stamp, 255, 255, 255, 100));
+    $diagonal = imagerotate($stamp, 28, imagecolorallocatealpha($stamp, 0, 0, 0, 127));
+    $labelWidth = max(1, (int) ($width * 0.32));
+    $labelHeight = max(1, (int) ($labelWidth * imagesy($diagonal) / imagesx($diagonal)));
+    $stepX = max(1, (int) ($labelWidth * 1.22));
+    $stepY = max(1, (int) ($labelHeight * 1.07));
     imagealphablending($image, true);
-    imagecopyresized($image, $stamp, (int) (($width - $labelWidth) / 2),
-        max(0, (int) (($height - $labelHeight) / 2)), 0, 0,
-        $labelWidth, $labelHeight, $markWidth + 2, $markHeight + 2);
+    for ($row = 0, $y = -(int) ($labelHeight / 2); $y < $height; $row++, $y += $stepY) {
+        for ($x = -(int) ($labelWidth / 3) - ($row % 2) * (int) ($stepX / 2); $x < $width; $x += $stepX) {
+            imagecopyresized($image, $diagonal, $x, $y, 0, 0,
+                $labelWidth, $labelHeight, imagesx($diagonal), imagesy($diagonal));
+        }
+    }
     header('Content-Type: image/jpeg');
     imagejpeg($image, null, 90);
     exit;
