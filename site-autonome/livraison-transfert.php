@@ -72,8 +72,12 @@ foreach ($manifest['photos'] as $number => $name) {
     }
 }
 $manifest['expires'] = time() + 5 * 86400;
-if (file_put_contents($stage . '/gallery.json', json_encode($manifest, JSON_THROW_ON_ERROR)) === false
-    || !rename($stage, $target)) {
+if (file_put_contents($stage . '/gallery.json', json_encode($manifest, JSON_THROW_ON_ERROR)) === false) {
+    error_log('Gallery publish: manifest write failed');
+    stop(500);
+}
+if (!rename($stage, $target)) {
+    error_log('Gallery publish: final directory rename failed');
     stop(500);
 }
 stop(204);
