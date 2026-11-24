@@ -23,9 +23,10 @@ if (!is_string($gallery) || !preg_match('/\A[a-f0-9]{32}\z/', $gallery)) {
 }
 $root = dirname(__DIR__) . '/.photographie-livraisons';
 $dir = $root . '/' . $gallery;
-$manifest = is_readable($dir . '/gallery.json')
-    ? json_decode((string) file_get_contents($dir . '/gallery.json'), true) : null;
-if (!is_array($manifest) || $manifest['expires'] <= time()) {
+$manifestPath = $dir . '/gallery.json';
+$manifest = is_readable($manifestPath)
+    ? json_decode((string) file_get_contents($manifestPath), true) : null;
+if (!is_array($manifest) || min($manifest['expires'], filemtime($manifestPath) + 5 * 86400) <= time()) {
     fail(404, 'Galerie indisponible ou expirée.');
 }
 $url = '?g=' . $gallery;
@@ -58,10 +59,30 @@ if ($photo !== null) {
     if (!is_file($path)) {
         fail(404, 'Photo indisponible.');
     }
-    header('Content-Type: image/jpeg');
-    header('Content-Length: ' . filesize($path));
     session_write_close();
-    readfile($path);
+    if (!function_exists('imagecreatefromjpeg') || !($image = @imagecreatefromjpeg($path))) {
+        fail(503, 'Image protégée temporairement indisponible.');
+    }
+    $width = imagesx($image);
+    $height = imagesy($image);
+    $mark = 'PHOTOGRAPHIE IMMOBILIERE QUEBEC';
+    $font = 5;
+    $markWidth = imagefontwidth($font) * strlen($mark);
+    $markHeight = imagefontheight($font);
+    $stamp = imagecreatetruecolor($markWidth + 2, $markHeight + 2);
+    imagealphablending($stamp, false);
+    imagesavealpha($stamp, true);
+    imagefill($stamp, 0, 0, imagecolorallocatealpha($stamp, 0, 0, 0, 127));
+    imagestring($stamp, $font, 1, 1, $mark, imagecolorallocatealpha($stamp, 0, 0, 0, 100));
+    imagestring($stamp, $font, 0, 0, $mark, imagecolorallocatealpha($stamp, 255, 255, 255, 91));
+    $labelWidth = max(1, (int) ($width * 0.42));
+    $labelHeight = max(1, (int) ($labelWidth * ($markHeight + 2) / ($markWidth + 2)));
+    imagealphablending($image, true);
+    imagecopyresized($image, $stamp, (int) (($width - $labelWidth) / 2),
+        max(0, (int) (($height - $labelHeight) / 2)), 0, 0,
+        $labelWidth, $labelHeight, $markWidth + 2, $markHeight + 2);
+    header('Content-Type: image/jpeg');
+    imagejpeg($image, null, 90);
     exit;
 }
 
@@ -132,6 +153,7 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 </style></head><body><main>
 <p>Photographie immobilière Québec · Galerie privée</p>
 <h1><?= esc($manifest['title']) ?></h1>
+<p><strong>Ce lien deviendra inactif après 5 jours.</strong></p>
 <?php if ($ownerView): ?>
 <p>Vue photographe · Demandes de retouche reçues</p>
 <?php else: ?>
