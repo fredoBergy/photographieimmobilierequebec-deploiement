@@ -36,9 +36,15 @@ if ($ownerView) {
 }
 $role = $ownerView ? 'photographe' : 'client';
 $accessHash = $manifest[$ownerView ? 'owner_hash' : 'token_hash'] ?? '';
+$notificationToken = isset($manifest['owner_hash'])
+    ? hash_hmac('sha256', 'retouches-notification:' . $gallery, $manifest['owner_hash']) : '';
 $token = $_GET['access'] ?? null;
-if ($token !== null) {
-    if (!is_string($token) || !hash_equals($accessHash, hash('sha256', $token))) {
+$notification = $_GET['notification'] ?? null;
+if ($token !== null || $notification !== null) {
+    $linkValid = is_string($token) && hash_equals($accessHash, hash('sha256', $token));
+    $notificationValid = $ownerView && $notificationToken !== '' && is_string($notification)
+        && hash_equals($notificationToken, $notification);
+    if (!$linkValid && !$notificationValid) {
         fail(404, 'Galerie indisponible.');
     }
     session_regenerate_id(true);
@@ -161,6 +167,22 @@ if ($isPost) {
         unlink($draftPath);
     }
     $_SESSION['sent'][$gallery] = true;
+    if (($requests || !empty($_SESSION['retryNotice'][$gallery])) && $notificationToken !== '') {
+        $recipient = 'fbergeron@agence2t3m.com';
+        $sender = 'fbergeron@photographie-immobiliere-quebec.com';
+        $link = 'https://photographie-immobiliere-quebec.com/livraison-client.php?g=' . $gallery
+            . '&vue=photographe&notification=' . $notificationToken;
+        $subject = '=?UTF-8?B?' . base64_encode('Demandes de retouche · Galerie privée') . '?=';
+        $body = "Des demandes de retouche ont été envoyées pour la galerie suivante.\r\n\r\n"
+            . $manifest['title'] . "\r\n\r\nOuvrir la vue photographe :\r\n" . $link . "\r\n";
+        $headers = "From: Photographie immobiliere Quebec <$sender>\r\n"
+            . "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+            . "Content-Transfer-Encoding: base64";
+        $accepted = function_exists('mail') && @mail($recipient, $subject,
+            chunk_split(base64_encode($body), 76, "\r\n"), $headers, '-f' . $sender);
+        $_SESSION['retryNotice'][$gallery] = !$accepted;
+        error_log('Retouches notification ' . ($accepted ? 'accepted' : 'failed') . ': ' . $gallery);
+    }
     header('Location: ' . $url, true, 303);
     exit;
 }
@@ -193,6 +215,9 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <?php else: ?>
 <p>Ouvrez une photo pour la voir en grand ou écrivez une demande de retouche sous la photo concernée.</p>
 <?php if ($sent): ?><p role="status">Tes demandes de retouche ont été enregistrées.</p><?php endif; ?>
+<?php if ($sent && !empty($_SESSION['retryNotice'][$gallery])): ?>
+<p role="status">Le courriel n’a pas pu être envoyé. Clique de nouveau sur Envoyer au photographe pour réessayer.</p>
+<?php endif; ?>
 <?php if ($saved): ?><p role="status">Brouillon enregistré. Tu peux rouvrir ce lien pour continuer.</p><?php endif; ?>
 <form method="post" action="<?= esc($url) ?>">
 <input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
