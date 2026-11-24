@@ -42,6 +42,21 @@ if (!$input) {
 if (preg_match('/\A[1-9][0-9]{0,2}\z/', $part) && (int) $part <= 500) {
     $payload = json_decode((string) stream_get_contents($input, 35 * 1024 * 1024), true);
     $image = is_string($payload['jpeg'] ?? null) ? base64_decode($payload['jpeg'], true) : false;
+    if (isset($payload['offset'])) {
+        $offset = $payload['offset'];
+        if (!is_int($offset) || $offset < 0 || !is_string($image) || $image === ''
+            || strlen($image) > 92160 || $offset + strlen($image) > 25 * 1024 * 1024) {
+            stop(400);
+        }
+        $path = $stage . '/photos/' . $part . '.jpg';
+        if ($offset !== 0 && (!is_file($path) || filesize($path) !== $offset)) {
+            stop(409);
+        }
+        if (file_put_contents($path, $image, $offset === 0 ? 0 : FILE_APPEND) !== strlen($image)) {
+            stop(500);
+        }
+        stop(204);
+    }
     if (!is_string($image) || strlen($image) > 25 * 1024 * 1024
         || (getimagesizefromstring($image)[2] ?? null) !== IMAGETYPE_JPEG) {
         stop(400);
@@ -67,7 +82,8 @@ foreach (['token_hash', 'owner_hash'] as $field) {
 }
 foreach ($manifest['photos'] as $number => $name) {
     if (!is_int($number) || $number < 1 || $number > 500 || !is_string($name)
-        || !is_file($stage . '/photos/' . $number . '.jpg')) {
+        || !is_file($stage . '/photos/' . $number . '.jpg')
+        || (@getimagesize($stage . '/photos/' . $number . '.jpg')[2] ?? null) !== IMAGETYPE_JPEG) {
         stop(400);
     }
 }
