@@ -40,7 +40,8 @@ if (!$input) {
     stop(400);
 }
 if (preg_match('/\A[1-9][0-9]{0,2}\z/', $part) && (int) $part <= 500) {
-    $image = stream_get_contents($input, 25 * 1024 * 1024 + 1);
+    $payload = json_decode((string) stream_get_contents($input, 35 * 1024 * 1024), true);
+    $image = is_string($payload['jpeg'] ?? null) ? base64_decode($payload['jpeg'], true) : false;
     if (!is_string($image) || strlen($image) > 25 * 1024 * 1024
         || (getimagesizefromstring($image)[2] ?? null) !== IMAGETYPE_JPEG) {
         stop(400);
