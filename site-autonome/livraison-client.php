@@ -68,6 +68,11 @@ if (!$paired) {
         $cards[$id] = ['' => $id];
     }
 }
+$zoom = $_GET['zoom'] ?? null;
+if ($zoom !== null && (!is_string($zoom) || !isset($cards[$zoom]))) {
+    fail(404, 'Photo indisponible.');
+}
+$viewUrl = $zoom === null ? $url : $url . '&zoom=' . rawurlencode($zoom);
 $photo = $_GET['photo'] ?? null;
 if ($photo !== null) {
     if (!is_string($photo) || !preg_match('/\A[0-9]+\z/', $photo) || !isset($photos[$photo])) {
@@ -155,7 +160,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     $action = $_POST['action'] ?? 'envoyer';
+    if ($zoom !== null && ($action !== 'enregistrer' || array_keys($notes) !== [(int) $zoom])) {
+        fail(400, 'Demande invalide.');
+    }
     if ($action === 'enregistrer') {
+        if ($zoom !== null && is_file($draftPath)) {
+            $previous = json_decode((string) file_get_contents($draftPath), true);
+            if (!is_array($previous)) {
+                fail(500, 'Impossible de lire le brouillon.');
+            }
+            $notes += $previous;
+        }
         $draft = json_encode($notes, JSON_INVALID_UTF8_SUBSTITUTE);
         $temp = tempnam($dir, '.brouillon-');
         if ($draft === false || $temp === false || file_put_contents($temp, $draft) !== strlen($draft)
@@ -163,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             fail(500, 'Impossible d’enregistrer le brouillon.');
         }
         $_SESSION['saved'][$gallery] = true;
-        header('Location: ' . $url, true, 303);
+        header('Location: ' . $viewUrl, true, 303);
         exit;
     }
     if ($action !== 'envoyer') {
@@ -247,11 +262,13 @@ article{min-width:0;background:white;padding:14px;border-radius:8px}
 .pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 figure{margin:0;min-width:0}figcaption{margin-top:6px;font-weight:600}
 img{display:block;width:100%;aspect-ratio:3/2;object-fit:contain;background:#eee}
+.agrandie img{aspect-ratio:auto}
 textarea{display:block;box-sizing:border-box;width:100%;font:inherit;margin-top:8px;padding:8px;resize:vertical}
 button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-radius:6px;padding:12px 18px}
 </style></head><body><main>
 <p>Photographie immobilière Québec · Galerie privée</p>
 <h1><?= esc($manifest['title']) ?></h1>
+<?php if ($zoom !== null): ?><p><a href="<?= esc($url) ?>">Retour à la galerie</a></p><?php endif; ?>
 <p><strong>Ce lien deviendra inactif après 5 jours.</strong></p>
 <?php if ($ownerView): ?>
 <p>Vue photographe · Demandes de retouche reçues</p>
@@ -262,20 +279,27 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 <p role="status">Le courriel n’a pas pu être envoyé. Clique de nouveau sur Envoyer au photographe pour réessayer.</p>
 <?php endif; ?>
 <?php if ($saved): ?><p role="status">Brouillon enregistré. Tu peux rouvrir ce lien pour continuer.</p><?php endif; ?>
-<form method="post" action="<?= esc($url) ?>">
+<form method="post" action="<?= esc($viewUrl) ?>">
 <input type="hidden" name="csrf" value="<?= esc($_SESSION['csrf']) ?>">
 <?php endif; ?>
-<div class="grid">
+<div class="<?= $zoom === null ? 'grid' : 'agrandie' ?>">
 <?php foreach ($cards as $id => $versions): $name = $photos[$id]; ?>
+<?php if ($zoom !== null && $id !== (int) $zoom) { continue; } ?>
 <article>
+<?php if ($zoom !== null && $paired): ?>
+<img src="<?= esc($url . '&photo=' . $id . '&comparaison=1') ?>" alt="Comparaison Avant et Après">
+<?php else: ?>
 <div class="<?= $paired ? 'pair' : '' ?>">
 <?php foreach ($versions as $label => $versionId): $image = esc($url . '&photo=' . $versionId); ?>
-<?php $zoom = $paired ? esc($url . '&photo=' . $id . '&comparaison=1') : $image; ?>
-<figure><a href="<?= $zoom ?>" target="_blank" rel="noopener"<?= $paired ? ' aria-label="Ouvrir la comparaison Avant et Après"' : '' ?>><img src="<?= $image ?>" alt="<?= esc($label ?: $name) ?>" loading="lazy"></a>
+<figure>
+<?php if ($zoom === null): ?><a href="<?= esc($url . '&zoom=' . $id) ?>"<?= $paired ? ' aria-label="Ouvrir la comparaison Avant et Après"' : '' ?>><?php endif; ?>
+<img src="<?= $image ?>" alt="<?= esc($label ?: $name) ?>" loading="lazy">
+<?php if ($zoom === null): ?></a><?php endif; ?>
 <?php if ($label !== ''): ?><figcaption><?= esc($label) ?></figcaption><?php endif; ?>
 </figure>
 <?php endforeach; ?>
 </div>
+<?php endif; ?>
 <h2><?= esc($name) ?></h2>
 <?php if ($ownerView): ?>
 <?php foreach (array_reverse($byPhoto[$name] ?? []) as $index => $note): ?>
@@ -290,6 +314,7 @@ button{margin-top:20px;font:inherit;background:#222;color:white;border:0;border-
 </div>
 <?php if (!$ownerView): ?>
 <button type="submit" name="action" value="enregistrer">Enregistrer</button>
-<button type="submit" name="action" value="envoyer">Envoyer au photographe</button></form>
+<?php if ($zoom === null): ?><button type="submit" name="action" value="envoyer">Envoyer au photographe</button><?php endif; ?>
+</form>
 <?php endif; ?>
 </main></body></html>
